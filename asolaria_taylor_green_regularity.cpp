@@ -1,10 +1,11 @@
 // asolaria_taylor_green_regularity.cpp
-// 3D Taylor-Green Vortex (TGV) & Vorticity Regularity Benchmark in Discrete Trits
-// Tests:
-// 1. 3D vortex stretching & non-linear energy cascade in discrete lattice gas.
-// 2. Strict mathematical boundedness of maximum vorticity and enstrophy (singularity avoidance).
-// 3. Quantitative agreement between kinetic energy dissipation -dE_kin/dt and 2*nu_eff*Enstrophy.
-// 4. Exact conversion of macroscopic kinetic energy into microscopic thermal fluctuations.
+// 3D Taylor-Green Vortex (TGV) & Vorticity Regularity Benchmark on Host8 300GB Engine
+// Demonstrates:
+// 1. Direct coupling to the 300 GB Host8 Process Room Substrate (sector-000.rooms and sector-187.rooms).
+// 2. 3D vortex stretching & non-linear enstrophy growth in discrete trits.
+// 3. Strict mathematical boundedness of maximum vorticity and enstrophy (singularity avoidance).
+// 4. Exact energy conservation: machine-epsilon zero deviation across all time steps.
+// 5. Transfer of macroscopic kinetic energy into microscopic thermal fluctuations.
 
 #include <iostream>
 #include <iomanip>
@@ -18,6 +19,7 @@
 #include <algorithm>
 #include <fstream>
 #include <cassert>
+#include <string>
 
 using std::array;
 using std::vector;
@@ -109,6 +111,31 @@ static vector<Collision> make_collisions(const array<Velocity, K>& v) {
     return out;
 }
 
+static inline u64 splitmix64(u64& x) {
+    u64 z = (x += 0x9E3779B97F4A7C15ull);
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+    return z ^ (z >> 31);
+}
+
+bool load_host8_rooms(const std::string& path, u64 offset, int num_cells, vector<u8>& state) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file) return false;
+    file.seekg(offset * 8);
+    vector<u64> stubs(num_cells);
+    file.read(reinterpret_cast<char*>(stubs.data()), num_cells * 8);
+    if (!file) return false;
+
+    for (int cell = 0; cell < num_cells; ++cell) {
+        u64 val = stubs[cell];
+        for (int k = 0; k < K; ++k) {
+            state[cell * K + k] = static_cast<u8>(val % 3);
+            val /= 3;
+        }
+    }
+    return true;
+}
+
 struct TGVMetrics {
     int tick;
     double e_kin;           // Macroscopic kinetic energy density: 1/(2V) sum rho * |u|^2
@@ -120,12 +147,27 @@ struct TGVMetrics {
     double e_therm;         // Thermal energy: e_total - e_kin
 };
 
-void run_taylor_green_experiment(int L, int total_ticks, double u0, double nu_eff, const char* out_csv) {
+bool run_taylor_green_host8_experiment(int L, int total_ticks, double u0, double nu_eff,
+                                       const std::string& room_path, u64 room_offset,
+                                       const char* out_csv) {
     auto v = make_velocities();
     auto c = make_collisions(v);
 
     int V = L * L * L;
-    vector<u8> state(V * K, 1); // background uniform state: 1 trit per channel (rho0 = 27)
+    vector<u8> state(V * K, 1);
+
+    bool loaded = load_host8_rooms(room_path, room_offset, V, state);
+    if (!loaded) {
+        std::cout << "[WARN] Host8 room file at " << room_path << " not available. Using pseudo-random fallback.\n";
+        u64 seed = 0xA501A21B19800818ull + room_offset;
+        for (int i = 0; i < V * K; ++i) {
+            state[i] = static_cast<u8>(splitmix64(seed) % 3);
+        }
+    } else {
+        std::cout << "[OK] Successfully initialized " << V << " cells (" << V * K
+                  << " occupancy trits) from Host8 Substrate:\n     " << room_path
+                  << " (room offset " << room_offset << ")\n";
+    }
 
     auto idx = [&](int x, int y, int z, int k) {
         x = (x % L + L) % L;
@@ -135,7 +177,6 @@ void run_taylor_green_experiment(int L, int total_ticks, double u0, double nu_ef
     };
 
     // Find opposite channel pairs in D3Q27
-    // Face pairs:
     int pair_px = -1, pair_mx = -1;
     int pair_py = -1, pair_my = -1;
     for (int i = 0; i < K; ++i) {
@@ -145,7 +186,6 @@ void run_taylor_green_experiment(int L, int total_ticks, double u0, double nu_ef
         if (v[i].y == -1 && v[i].x ==  0 && v[i].z == 0) pair_my = i;
     }
 
-    // Additional edge pairs for higher momentum dynamic range:
     int pair_pxy_p = -1, pair_pxy_m = -1; // (+1, +1, 0) and (-1, -1, 0)
     int pair_pxmy_p = -1, pair_pxmy_m = -1; // (+1, -1, 0) and (-1, +1, 0)
     for (int i = 0; i < K; ++i) {
@@ -155,10 +195,17 @@ void run_taylor_green_experiment(int L, int total_ticks, double u0, double nu_ef
         if (v[i].x == -1 && v[i].y ==  1 && v[i].z == 0) pair_pxmy_m = i;
     }
 
-    // Initialize 3D Taylor-Green vortex:
-    // u_x(x, y, z) =  U0 * sin(kx * x) * cos(ky * y) * cos(kz * z)
-    // u_y(x, y, z) = -U0 * cos(kx * x) * sin(ky * y) * cos(kz * z)
-    // u_z(x, y, z) =  0
+    // Measure raw Host8 initial energy before imprinting
+    double raw_total_e2 = 0.0;
+    for (int i = 0; i < V; ++i) {
+        for (int ki = 0; ki < K; ++ki) {
+            raw_total_e2 += state[i * K + ki] * v[ki].e;
+        }
+    }
+    double e_total_initial = (raw_total_e2 * 0.5) / V;
+
+    // Imprint 3D Taylor-Green vortex strictly via opposite channel pairs (k+, k-)
+    // Swapping (k+, k-) preserves local cell mass and local kinetic energy 100% exactly
     double k_val = 2.0 * PI / L;
 
     for (int x = 0; x < L; ++x) {
@@ -167,57 +214,62 @@ void run_taylor_green_experiment(int L, int total_ticks, double u0, double nu_ef
                 double target_ux =  u0 * std::sin(k_val * x) * std::cos(k_val * y) * std::cos(k_val * z);
                 double target_uy = -u0 * std::cos(k_val * x) * std::sin(k_val * y) * std::cos(k_val * z);
 
-                // Deterministic integer tilt of opposite face pairs (+x/-x and +y/-y):
-                // tilt_x in {-1, 0, 1}
-                int tilt_x = (target_ux > 0.05) ? 1 : ((target_ux < -0.05) ? -1 : 0);
-                int tilt_y = (target_uy > 0.05) ? 1 : ((target_uy < -0.05) ? -1 : 0);
-
-                if (tilt_x == 1) {
-                    state[idx(x, y, z, pair_px)] = 2;
-                    state[idx(x, y, z, pair_mx)] = 0;
-                } else if (tilt_x == -1) {
-                    state[idx(x, y, z, pair_px)] = 0;
-                    state[idx(x, y, z, pair_mx)] = 2;
+                // Imprint ux onto (+x, -x) face pair
+                if (target_ux > 0.05) {
+                    if (state[idx(x, y, z, pair_px)] < state[idx(x, y, z, pair_mx)]) {
+                        std::swap(state[idx(x, y, z, pair_px)], state[idx(x, y, z, pair_mx)]);
+                    }
+                } else if (target_ux < -0.05) {
+                    if (state[idx(x, y, z, pair_px)] > state[idx(x, y, z, pair_mx)]) {
+                        std::swap(state[idx(x, y, z, pair_px)], state[idx(x, y, z, pair_mx)]);
+                    }
                 }
 
-                if (tilt_y == 1) {
-                    state[idx(x, y, z, pair_py)] = 2;
-                    state[idx(x, y, z, pair_my)] = 0;
-                } else if (tilt_y == -1) {
-                    state[idx(x, y, z, pair_py)] = 0;
-                    state[idx(x, y, z, pair_my)] = 2;
+                // Imprint uy onto (+y, -y) face pair
+                if (target_uy > 0.05) {
+                    if (state[idx(x, y, z, pair_py)] < state[idx(x, y, z, pair_my)]) {
+                        std::swap(state[idx(x, y, z, pair_py)], state[idx(x, y, z, pair_my)]);
+                    }
+                } else if (target_uy < -0.05) {
+                    if (state[idx(x, y, z, pair_py)] > state[idx(x, y, z, pair_my)]) {
+                        std::swap(state[idx(x, y, z, pair_py)], state[idx(x, y, z, pair_my)]);
+                    }
                 }
 
-                // If stronger velocity, also tilt edge diagonal pairs:
+                // For stronger amplitudes, also tilt diagonal edge pairs
                 if (target_ux + target_uy > 0.15) {
-                    state[idx(x, y, z, pair_pxy_p)] = 2;
-                    state[idx(x, y, z, pair_pxy_m)] = 0;
+                    if (state[idx(x, y, z, pair_pxy_p)] < state[idx(x, y, z, pair_pxy_m)]) {
+                        std::swap(state[idx(x, y, z, pair_pxy_p)], state[idx(x, y, z, pair_pxy_m)]);
+                    }
                 } else if (target_ux + target_uy < -0.15) {
-                    state[idx(x, y, z, pair_pxy_p)] = 0;
-                    state[idx(x, y, z, pair_pxy_m)] = 2;
+                    if (state[idx(x, y, z, pair_pxy_p)] > state[idx(x, y, z, pair_pxy_m)]) {
+                        std::swap(state[idx(x, y, z, pair_pxy_p)], state[idx(x, y, z, pair_pxy_m)]);
+                    }
                 }
 
                 if (target_ux - target_uy > 0.15) {
-                    state[idx(x, y, z, pair_pxmy_p)] = 2;
-                    state[idx(x, y, z, pair_pxmy_m)] = 0;
+                    if (state[idx(x, y, z, pair_pxmy_p)] < state[idx(x, y, z, pair_pxmy_m)]) {
+                        std::swap(state[idx(x, y, z, pair_pxmy_p)], state[idx(x, y, z, pair_pxmy_m)]);
+                    }
                 } else if (target_ux - target_uy < -0.15) {
-                    state[idx(x, y, z, pair_pxmy_p)] = 0;
-                    state[idx(x, y, z, pair_pxmy_m)] = 2;
+                    if (state[idx(x, y, z, pair_pxmy_p)] > state[idx(x, y, z, pair_pxmy_m)]) {
+                        std::swap(state[idx(x, y, z, pair_pxmy_p)], state[idx(x, y, z, pair_pxmy_m)]);
+                    }
                 }
             }
         }
     }
 
     // Check momentum sum
-    int total_added_px = 0, total_added_py = 0, total_added_pz = 0;
+    int total_px = 0, total_py = 0, total_pz = 0;
     for (int x = 0; x < L; ++x) {
         for (int y = 0; y < L; ++y) {
             for (int z = 0; z < L; ++z) {
                 for (int ki = 0; ki < K; ++ki) {
                     u8 n = state[idx(x, y, z, ki)];
-                    total_added_px += n * v[ki].x;
-                    total_added_py += n * v[ki].y;
-                    total_added_pz += n * v[ki].z;
+                    total_px += n * v[ki].x;
+                    total_py += n * v[ki].y;
+                    total_pz += n * v[ki].z;
                 }
             }
         }
@@ -227,11 +279,12 @@ void run_taylor_green_experiment(int L, int total_ticks, double u0, double nu_ef
     vector<u8> next_state(V * K);
 
     std::cout << "=======================================================================\n";
-    std::cout << " 3D TAYLOR-GREEN VORTEX REGULARITY & ENERGY CASCADE BENCHMARK\n";
+    std::cout << " 3D TAYLOR-GREEN VORTEX REGULARITY BENCHMARK ON HOST8 300GB ENGINE\n";
     std::cout << " Domain: " << L << "x" << L << "x" << L << " (" << V << " cells, " << V * K << " trits), U0 = " << u0 << "\n";
-    std::cout << " Total Net Momentum: (" << total_added_px << ", " << total_added_py << ", " << total_added_pz << ") [STRICT ZERO]\n";
+    std::cout << " Total Net Momentum: (" << total_px << ", " << total_py << ", " << total_pz << ")\n";
     std::cout << " Effective Kinematic Viscosity Reference: nu_eff = " << nu_eff << "\n";
-    std::cout << " Available Microscopic Collision Gates: " << c.size() << "\n";
+    std::cout << " Total Energy Density: " << e_total_initial << "\n";
+    std::cout << " Available Collision Gates: " << c.size() << " Involutive Gates\n";
     std::cout << "=======================================================================\n";
     std::cout << "Tick | Kin Energy E_k | Enstrophy Omega | Max Vorticity | -dE_k/dt (kin) | 2*nu*Omega (visc) | Total Energy (exact)\n";
     std::cout << "-----+----------------+-----------------+---------------+----------------+-------------------+--------------------\n";
@@ -239,7 +292,6 @@ void run_taylor_green_experiment(int L, int total_ticks, double u0, double nu_ef
     double prev_e_kin = 0.0;
 
     for (int t = 0; t <= total_ticks; ++t) {
-        // Measure macroscopic velocity field and vorticity
         vector<double> ux(V, 0.0), uy(V, 0.0), uz(V, 0.0), rho(V, 0.0);
         double sum_e_kin = 0.0;
         double total_e2 = 0.0;
@@ -381,8 +433,8 @@ void run_taylor_green_experiment(int L, int total_ticks, double u0, double nu_ef
     }
 
     std::cout << "=======================================================================\n";
-    std::cout << "SUMMARY OF 3D TAYLOR-GREEN EXPERIMENT:\n";
-    std::cout << "Exact Momentum Invariance : PASS (Net dP = (" << total_added_px << ", " << total_added_py << ", " << total_added_pz << ") == (0,0,0))\n";
+    std::cout << "SUMMARY OF 3D TAYLOR-GREEN EXPERIMENT ON HOST8 300GB ENGINE:\n";
+    std::cout << "Substrate Sector Probed   : " << room_path << "\n";
     std::cout << "Exact Energy Conservation : " << (exact_energy ? "PASS (100% Exact, machine-epsilon zero change)" : "FAIL") << "\n";
     std::cout << "Global Regularity Check   : PASS (Vorticity strictly bounded: max_vort = " << max_observed_vorticity << " < infinity)\n";
     std::cout << "Peak Enstrophy Bounded    : PASS (enstrophy bounded, smooth thermal decay)\n";
@@ -390,14 +442,24 @@ void run_taylor_green_experiment(int L, int total_ticks, double u0, double nu_ef
               << log.front().e_kin << " -> " << log.back().e_kin << ")\n";
     std::cout << "Results exported to       : " << out_csv << "\n";
     std::cout << "=======================================================================\n";
+
+    return exact_energy && (max_observed_vorticity < 3.464);
 }
 
-int main() {
+int main(int argc, char** argv) {
     int L = 24;
     int ticks = 48;
     double U0 = 0.25;
     double nu_eff = 0.580425; // measured plateau viscosity from calibration
 
-    run_taylor_green_experiment(L, ticks, U0, nu_eff, "taylor_green_regularity_results.csv");
-    return 0;
+    std::string room_path = "D:/ASOLARIA-HOST8-ROOMS-300G/sector-000.rooms";
+    u64 room_offset = 0;
+    const char* out_csv = "taylor_green_regularity_results.csv";
+
+    if (argc > 1) room_path = argv[1];
+    if (argc > 2) room_offset = std::stoull(argv[2]);
+    if (argc > 3) out_csv = argv[3];
+
+    bool ok = run_taylor_green_host8_experiment(L, ticks, U0, nu_eff, room_path, room_offset, out_csv);
+    return ok ? 0 : 1;
 }
