@@ -1,0 +1,45 @@
+# Exact-head replay of the result packages in results/. For each package: verify SHA256SUMS and the
+# HASH seal, then run its run.sh (seals and pinned inputs, Rust 1.81 build, clippy -D warnings,
+# byte-identical output). Fail-closed. Integer only, json=0.
+name: Results replay (Rust 1.81)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['results/**', '.github/workflows/results-replay.yml']
+  pull_request:
+    paths: ['results/**', '.github/workflows/results-replay.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    name: Replay result packages on the exact head
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust 1.81 with clippy
+        run: rustup toolchain install 1.81.0 --profile minimal -c clippy
+      - name: Verify chains and replay
+        run: |
+          set +e
+          set -uo pipefail
+          o=RESULTS-REPLAY.hbp; : > $o; bad=0; n=0
+          echo "RESULTS_REPLAY|run=$GITHUB_RUN_ID|commit=$GITHUB_SHA|json=0" >> $o
+          for d in results/*/; do
+            d=${d%/}; [ -f "$d/run.sh" ] || continue; n=$((n+1))
+            seal=$(ls $d/*.seal | head -1); hbi=$(ls $d/*.hbi | head -1)
+            sums=0; (cd $d && sha256sum -c --quiet SHA256SUMS) && sums=1
+            sealok=0; [ "$(cat $d/SHA256SUMS $hbi | sha256sum | cut -c1-64)" = "$(cat $seal)" ] && sealok=1
+            bash $d/run.sh > rep.txt 2>&1; rc=$?
+            grep -E '_REPLAY\|' rep.txt | sed "s#^#PKG|dir=$(basename $d)|#" >> $o
+            ok=0; [ $sums = 1 ] && [ $sealok = 1 ] && [ $rc = 0 ] && ok=1; [ $ok = 1 ] || { bad=1; cat rep.txt; }
+            echo "PACKAGE|dir=$(basename $d)|sha256sums=$sums|seal=$sealok|replay_exit=$rc|ok=$ok|json=0" >> $o
+          done
+          [ $n -gt 0 ] || bad=1
+          echo "RESULTS_REPLAY_RESULT|packages=$n|all_ok=$([ $bad = 0 ] && echo 1 || echo 0)|json=0" >> $o
+          cat $o
+          [ $bad = 0 ]
