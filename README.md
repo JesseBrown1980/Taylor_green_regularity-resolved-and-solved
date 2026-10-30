@@ -2,6 +2,22 @@
 
 > **Quantitative demonstration of 3D vortex stretching, bounded enstrophy dynamics, and non-singular energy cascade in an exact-arithmetic D3Q27 discrete lattice gas.**
 
+## Findings, 2026-10-30 (pre-registered, replayed in Rust 1.81)
+
+Two packages in [`results/`](results/) test this simulator with exact integer diagnostics, each
+replayed on every PR by `.github/workflows/results-replay.yml`:
+
+- [Noise test](results/2026-10-30-noise-test/): the occupancy bound holds at every tick, so velocity
+  and vorticity stay bounded. The enstrophy rise reaches the same level, about 2.0 million in
+  ∑|curl j|², in a control with the same cell states shuffled and no vortex (within 10% on 476 of
+  476 ticks), so it is lattice thermalisation. The coherent Taylor–Green amplitude decays smoothly,
+  halving by tick 15.
+- [Forced vortex, solar wind and pressure](results/2026-10-30-forced-pressure/): a drive in the
+  vortex's own pattern holds it at 86% of its starting amplitude through 480 ticks; a uniform gusty
+  wind drives the whole periodic box into a drift; a sheared wind builds large-scale flow in its own
+  pattern. Pressure P = 2E/3V fluctuates at the same level in every unforced and vortex-forced arm,
+  and the registered Taylor–Green pressure-mode measures read exactly 0 by symmetry.
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Arithmetic](https://img.shields.io/badge/Arithmetic-Exact%20Integer%20Only%20(No%20Floats)-brightgreen.svg)]()
 [![Energy Conservation](https://img.shields.io/badge/Total%20Energy%20Conservation-100%25%20Exact%20(Machine%20Epsilon%200.0)-success.svg)]()
