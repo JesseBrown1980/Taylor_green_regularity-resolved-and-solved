@@ -18,6 +18,13 @@ replayed on every PR by `.github/workflows/results-replay.yml`:
   pattern. Pressure P = 2E/3V fluctuates at the same level in every unforced and vortex-forced arm,
   and the registered Taylor–Green pressure-mode measures read exactly 0 by symmetry.
 
+- [Collapsing vortex at three resolutions](results/2026-10-30-cutoff/): a swirl driven toward zero
+  core radius at 24³, 48³ and 96³. Axis vorticity rises 681 → 2,011 → 4,078; the core ends at 1/8 of
+  the box at every resolution; at 96³ the peak cell momentum reaches the occupancy cap (364). The finite
+  fluid concentrates the vortex and stops the collapse.
+- [Transport on the current gates](results/2026-10-30-calibration/): kinematic viscosity 0.4397 and
+  0.4258 at Ly = 24 and 48 (within 3%), equation of state c_s² = 2/3 exactly.
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Arithmetic](https://img.shields.io/badge/Arithmetic-Exact%20Integer%20Only%20(No%20Floats)-brightgreen.svg)]()
 [![Energy Conservation](https://img.shields.io/badge/Total%20Energy%20Conservation-100%25%20Exact%20(Machine%20Epsilon%200.0)-success.svg)]()
