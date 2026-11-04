@@ -2,6 +2,10 @@
 
 > **Quantitative demonstration of 3D vortex stretching, bounded enstrophy dynamics, and non-singular energy cascade in an exact-arithmetic D3Q27 discrete lattice gas.**
 
+### Verified 3-step Clay/Clasy computational conversion (2026-11-04)
+
+The [three-leaf bridge result](bridge-clay/RESULTS-3LEAVES.md) and [actual Clay comparator](https://github.com/JesseBrown1980/continuum-Clay-variation/blob/main/bridge/taylor-green/README.md) convert the TGV 24³ state into **81 exact signed block-momentum observables** and check t=1,2,3 using pinned input files. The observable encoding and global-momentum sum preservation pass. **All 81 components disagree with Clay's nonlinear next state at each TGV step.** This explicitly limits any claim that the two finite models are dynamically equivalent. The original Taylor–Green source and historical negative controls are unchanged.
+
 ## Findings, 2026-10-30 (pre-registered, replayed in Rust 1.81)
 
 Two packages in [`results/`](results/) test this simulator with exact integer diagnostics, each
