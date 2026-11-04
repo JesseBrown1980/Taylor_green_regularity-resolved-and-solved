@@ -2,6 +2,14 @@
 
 > **Quantitative demonstration of 3D vortex stretching, bounded enstrophy dynamics, and non-singular energy cascade in an exact-arithmetic D3Q27 discrete lattice gas.**
 
+## Companion repositories: Clay finite-field model and Clasy X3
+
+[**Continuum Clay Variation**](https://github.com/JesseBrown1980/continuum-Clay-variation) · [**Clasy X3 independent verification**](https://github.com/JesseBrown1980/Clasy-repo-x-3-) · [**Cross-repository comparison and verification plan**](https://github.com/JesseBrown1980/continuum-Clay-variation/blob/main/docs/BRIDGE-TAYLOR-GREEN.md)
+
+Taylor–Green evolves 27 bounded occupancy channels **per spatial cell** via reversible collision and streaming. Clay/Clasy evolves **81 finite-field shell coordinates** with a rigorously derived compensated modular sum invariant. Both are integer-based finite systems, but their state spaces, conserved quantities, viscosity mechanisms, and spatial interpretations differ. **This is a documented research link, not a verified state conversion, common solver, proof of equivalence, or continuum Navier–Stokes solution.**
+
+The [October 30 shuffled-noise control](results/2026-10-30-noise-test/) showed that the large local enstrophy increase is also observed without a coherent vortex; the [cutoff result](results/2026-10-30-cutoff/) retains its registered A1 failure. These newer controls qualify the earlier causal interpretation and are not overridden by companion-model evidence.
+
 ## Findings, 2026-10-30 (pre-registered, replayed in Rust 1.81)
 
 Two packages in [`results/`](results/) test this simulator with exact integer diagnostics, each
