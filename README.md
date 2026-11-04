@@ -10,6 +10,12 @@ Taylor–Green evolves 27 bounded occupancy channels **per spatial cell** via re
 
 The [October 30 shuffled-noise control](results/2026-10-30-noise-test/) showed that the large local enstrophy increase is also observed without a coherent vortex; the [cutoff result](results/2026-10-30-cutoff/) retains its registered A1 failure. These newer controls qualify the earlier causal interpretation and are not overridden by companion-model evidence.
 
+### Verified three-time-step conversion and HTTP-0 3^16 address space (November 4, 2026)
+
+The [three-leaf computation and SHA-256 receipts](bridge-clay/RESULTS-3LEAVES.md) convert Taylor–Green's 24³ D3Q27 lattice into **81 exact signed block-momentum observables** at t=1, 2 and 3, and test them against the **actual Clay nonlinear update**. The conversion preserves the signed observables and global momentum, but **all 81 components fail to match Clay's one-step evolution** for TGV at each tested step. This noncommutation remains on record.
+
+The [HTTP-0 sparse ternary index](https://github.com/JesseBrown1980/qoled-internet-HEB-C-revisted-HTTP---free-0-hbi-hbp-sha-sh-hash/blob/main/docs/HTTP0-CLAY-3POWER16-BRIDGE.md) supplies **3^16 = 43,046,721 virtual addresses** with **729 occupied slots** from these three leaves, not 43 million independently simulated fluid states. Missing/invalid receipts are rejected.
+
 ## Findings, 2026-10-30 (pre-registered, replayed in Rust 1.81)
 
 Two packages in [`results/`](results/) test this simulator with exact integer diagnostics, each
