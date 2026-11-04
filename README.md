@@ -10,6 +10,12 @@ Taylor–Green evolves 27 bounded occupancy channels **per spatial cell** via re
 
 The [October 30 shuffled-noise control](results/2026-10-30-noise-test/) showed that the large local enstrophy increase is also observed without a coherent vortex; the [cutoff result](results/2026-10-30-cutoff/) retains its registered A1 failure. These newer controls qualify the earlier causal interpretation and are not overridden by companion-model evidence.
 
+### Native HEB-C/HTTP-0 engine now computes 96³ (November 4, 2026)
+
+The [actual 96³ HEB-C compute engine](https://github.com/JesseBrown1980/qoled-internet-HEB-C-revisted-HTTP---free-0-hbi-hbp-sha-sh-hash/blob/main/engine96/README.md) is merged at [HTTP-0 PR #3](https://github.com/JesseBrown1980/qoled-internet-HEB-C-revisted-HTTP---free-0-hbi-hbp-sha-sh-hash/pull/3). It evolves **96³ × 27 = 23,887,872 physical ternary channels**, using the same serialized 288 collision gates as this project's cutoff experiment (SHA-256 `a7fca71a…`). Its first GitHub-hosted three-step benchmark measured **0.889–1.025 seconds** for three forward updates in separate runs, with exact integer conservation, three-step reversal, SHA-256 deterministic replays, and a matching independent-coordinate streaming check. Its 24³ path matches the pre-existing HEB-C engine byte-for-byte.
+
+**Registered comparison scope:** the new engine benchmark uses unforced nonuniform synthetic initial conditions over three ticks. This repo's [96³ cutoff study](results/2026-10-30-cutoff/) uses a collapsing external drive through 192 ticks, retaining **C1 PASS and A1 FAIL**. The forced-drive and diagnostic-equivalence test remains OPEN. The engine and this repo now share source-pinned collision and streaming mathematics, with their differing experimental setups explicitly recorded.
+
 ## Findings, 2026-10-30 (pre-registered, replayed in Rust 1.81)
 
 Two packages in [`results/`](results/) test this simulator with exact integer diagnostics, each
